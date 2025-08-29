@@ -1,1 +1,66 @@
+blueprint:
+name: Battery Smart Charging (Agile + SoC + Plunge) — Lean
+description: >
+  Smart on/off control for a battery charger using Octopus Agile prices (via BottlecapDave).
+  No fixed deadline: looks ahead over a rolling horizon and picks the cheapest half-hour slots
+  to reach your Target SoC. Splits across multiple windows when optimal.
+
+  Special rules:
+    • Plunge price → FORCE ON (even at/above Target SoC): BMS will refuse extra charge and the
+      charger will simply power local loads.
+    • Optional low-price fallback → can also turn on when at/above target (configurable).
+    • Optional Saving Session → FORCE OFF in that window to protect payout.
+
+  Optional filters: Greener Nights window and price cap. Europe/London time; DST handled by HA.
+domain: automation
+
+input:
+charger_switch:
+name: Charger switch
+description: Smart plug or switch that powers your charger
+selector:
+entity:
+domain: switch
+
+battery_soc:
+name: Battery SoC sensor (%)
+description: Sensor returning 0–100 (e.g. SmartShunt/BMS)
+selector:
+entity:
+domain: sensor
+
+battery_capacity_kwh:
+name: Battery capacity (kWh)
+description: Example: 7.17 (Fogstar 560 Ah @ 12.8 V)
+default: 5.0
+selector:
+number:
+min: 0.1
+max: 100.0
+step: 0.01
+unit_of_measurement: kWh
+mode: box
+
+charger_power_w:
+name: Charger output power (W)
+description: Real charging watts at your chosen setting (e.g., 600)
+default: 600
+selector:
+number:
+min: 50
+max: 4000
+step: 10
+unit_of_measurement: W
+mode: box
+
+charge_efficiency:
+name: Charge efficiency (0–1)
+description: Accounts for losses; 0.92 is a sensible default
+default: 0.92
+selector:
+number:
+min: 0.6
+max: 1.0
+step: 0.01
+mode: slider
 
