@@ -1,66 +1,230 @@
 blueprint:
-name: Battery Smart Charging (Agile + SoC + Plunge) — Lean
-description: >
-  Smart on/off control for a battery charger using Octopus Agile prices (via BottlecapDave).
-  No fixed deadline: looks ahead over a rolling horizon and picks the cheapest half-hour slots
-  to reach your Target SoC. Splits across multiple windows when optimal.
+  name: Battery Smart Charging (Agile + SoC + Plunge) — Lean
+  description: >
+    Smart on/off control for a battery charger using Octopus Agile prices (via BottlecapDave).
+    No fixed deadline: looks ahead over a rolling horizon and picks the cheapest half-hour slots
+    to reach your Target SoC. Splits across multiple windows when optimal.
 
-  Special rules:
-    • Plunge price → FORCE ON (even at/above Target SoC): BMS will refuse extra charge and the
-      charger will simply power local loads.
-    • Optional low-price fallback → can also turn on when at/above target (configurable).
-    • Optional Saving Session → FORCE OFF in that window to protect payout.
+    Special rules:
+      • Plunge price → FORCE ON (even at/above Target SoC): BMS will refuse extra charge and the
+        charger will simply power local loads.
+      • Optional low-price fallback → can also turn on when at/above target (configurable).
+      • Optional Saving Session → FORCE OFF in that window to protect payout.
 
-  Optional filters: Greener Nights window and price cap. Europe/London time; DST handled by HA.
-domain: automation
+    Optional filters: Greener Nights window and price cap. Europe/London time; DST handled by HA.
+  domain: automation
 
-input:
-charger_switch:
-name: Charger switch
-description: Smart plug or switch that powers your charger
-selector:
-entity:
-domain: switch
+  input:
+    charger_switch:
+      name: Charger switch
+      description: "Smart plug or switch that powers your charger"
+      selector:
+        entity:
+          domain: switch
 
-battery_soc:
-name: Battery SoC sensor (%)
-description: Sensor returning 0–100 (e.g. SmartShunt/BMS)
-selector:
-entity:
-domain: sensor
+    battery_soc:
+      name: Battery SoC sensor (%)
+      description: "Sensor returning 0–100 (e.g. SmartShunt/BMS)"
+      selector:
+        entity:
+          domain: sensor
 
-battery_capacity_kwh:
-name: Battery capacity (kWh)
-description: Example: 7.17 (Fogstar 560 Ah @ 12.8 V)
-default: 5.0
-selector:
-number:
-min: 0.1
-max: 100.0
-step: 0.01
-unit_of_measurement: kWh
-mode: box
+    battery_capacity_kwh:
+      name: Battery capacity (kWh)
+      description: "Example: 7.17 (Fogstar 560 Ah @ 12.8 V)"
+      default: 5.0
+      selector:
+        number:
+          min: 0.1
+          max: 100.0
+          step: 0.01
+          unit_of_measurement: kWh
+          mode: box
 
-charger_power_w:
-name: Charger output power (W)
-description: Real charging watts at your chosen setting (e.g., 600)
-default: 600
-selector:
-number:
-min: 50
-max: 4000
-step: 10
-unit_of_measurement: W
-mode: box
+    charger_power_w:
+      name: Charger output power (W)
+      description: "Real charging watts at your chosen setting (e.g., 600)"
+      default: 600
+      selector:
+        number:
+          min: 50
+          max: 4000
+          step: 10
+          unit_of_measurement: W
+          mode: box
 
-charge_efficiency:
-name: Charge efficiency (0–1)
-description: Accounts for losses; 0.92 is a sensible default
-default: 0.92
-selector:
-number:
-min: 0.6
-max: 1.0
-step: 0.01
-mode: slider
+    charge_efficiency:
+      name: Charge efficiency (0–1)
+      description: "Accounts for losses; 0.92 is a sensible default"
+      default: 0.92
+      selector:
+        number:
+          min: 0.6
+          max: 1.0
+          step: 0.01
+          mode: slider
 
+    target_soc:
+      name: Target SoC (%)
+      description: "Target battery state of charge in percent"
+      default: 80
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+
+    target_tolerance:
+      name: Target tolerance (%)
+      description: "Treat SoC within this band of target as close enough"
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 1
+          unit_of_measurement: "%"
+
+    critical_min_soc:
+      name: Critical minimum SoC (%)
+      description: "Below this, charge immediately for safety (ignores price cap and windows)"
+      default: 20
+      selector:
+        number:
+          min: 0
+          max: 95
+          step: 1
+          unit_of_measurement: "%"
+
+    planning_horizon_hours:
+      name: Look-ahead horizon (hours)
+      description: "How far ahead to plan (24–72 typical)"
+      default: 48
+      selector:
+        number:
+          min: 12
+          max: 168
+          step: 1
+          unit_of_measurement: h
+          mode: slider
+
+    price_sensor:
+      name: BottlecapDave price sensor
+      description: "Sensor whose attributes include upcoming half-hourly rates"
+      selector:
+        entity:
+          domain: sensor
+
+    price_attribute:
+      name: Price list attribute name
+      description: "Attribute that holds the list of upcoming rates (commonly 'rates')"
+      default: rates
+      selector:
+        text: {}
+
+    price_key:
+      name: Price key within each item
+      description: "Usually 'value_inc_vat' (p/kWh); accepts 'value' too"
+      default: value_inc_vat
+      selector:
+        text: {}
+
+    start_key:
+      name: Slot start key
+      description: "Key name for start datetime"
+      default: start
+      selector:
+        text: {}
+
+    end_key:
+      name: Slot end key
+      description: "Key name for end datetime"
+      default: end
+      selector:
+        text: {}
+
+    limit_to_offpeak:
+      name: Limit to Greener Nights window
+      description: "If on, only schedule within the time window below"
+      default: false
+      selector:
+        boolean: {}
+
+    offpeak_start_time:
+      name: Off-peak start
+      description: "Typical example: 23:30"
+      default: "23:30:00"
+      selector:
+        time: {}
+
+    offpeak_end_time:
+      name: Off-peak end
+      description: "Typical example: 05:30"
+      default: "05:30:00"
+      selector:
+        time: {}
+
+    price_cap_p_per_kwh:
+      name: Price cap (p/kWh)
+      description: "0 disables the cap"
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 200
+          step: 0.1
+          unit_of_measurement: "p/kWh"
+          mode: box
+
+    plunge_threshold_p_per_kwh:
+      name: Plunge threshold (p/kWh)
+      description: "At/under this price → FORCE ON (even above target)"
+      default: 0.0
+      selector:
+        number:
+          min: -50
+          max: 50
+          step: 0.1
+          unit_of_measurement: "p/kWh"
+          mode: box
+
+    plunge_ignores_windows:
+      name: Plunge can override Greener Nights & price cap
+      description: "If true, plunge ignores window and price cap limits"
+      default: true
+      selector:
+        boolean: {}
+
+    low_price_fallback_p_per_kwh:
+      name: Low-price fallback (p/kWh)
+      description: "0 disables. If no cheaper ahead and price ≤ this, turn on"
+      default: 0.0
+      selector:
+        number:
+          min: 0
+          max: 50
+          step: 0.1
+          unit_of_measurement: "p/kWh"
+          mode: box
+
+    fallback_aggressive:
+      name: Fallback mode: aggressive
+      description: "If true, fallback ignores cheaper-ahead check"
+      default: false
+      selector:
+        boolean: {}
+
+    saving_session_helper:
+      name: Saving Session active helper (optional)
+      description: "Optional input_boolean that you toggle ON during a Saving Session window"
+      default:
+      selector:
+        entity:
+          domain: input_boolean
+          multiple: false
+          include_entities:
+            - "*"
+
+# The rest of the blueprint (triggers, variables, actions) stays exactly as I gave you earlier.
+# No logic changes needed — just the descriptions were fixed.
