@@ -209,7 +209,7 @@ blueprint:
           mode: box
 
     fallback_aggressive:
-      name: Fallback mode: aggressive
+      name: "Fallback mode: aggressive"
       description: "If true, fallback ignores cheaper-ahead check"
       default: false
       selector:
