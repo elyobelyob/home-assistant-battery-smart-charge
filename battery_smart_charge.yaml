@@ -5,6 +5,8 @@ blueprint:
     Event-driven: reacts to new Agile data and SoC changes.
     Automatically handles Europe/London time with DST.
 
+alias: "Battery Smart Charging (Agile + SoC + Plunge)"
+
   domain: automation
   input:
     charger_switch:
