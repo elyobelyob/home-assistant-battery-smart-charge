@@ -226,5 +226,120 @@ blueprint:
           include_entities:
             - "*"
 
-# The rest of the blueprint (triggers, variables, actions) stays exactly as I gave you earlier.
-# No logic changes needed — just the descriptions were fixed.
+trigger:
+  - platform: time_pattern
+    minutes: "/5"
+
+variables:
+  charger_switch: !input charger_switch
+  battery_soc: !input battery_soc
+  battery_capacity_kwh: !input battery_capacity_kwh
+  charger_power_w: !input charger_power_w
+  charge_efficiency: !input charge_efficiency
+  target_soc: !input target_soc
+  target_tolerance: !input target_tolerance
+  critical_min_soc: !input critical_min_soc
+  planning_horizon_hours: !input planning_horizon_hours
+  price_sensor: !input price_sensor
+  price_attribute: !input price_attribute
+  price_key: !input price_key
+  start_key: !input start_key
+  end_key: !input end_key
+  limit_to_offpeak: !input limit_to_offpeak
+  offpeak_start_time: !input offpeak_start_time
+  offpeak_end_time: !input offpeak_end_time
+  price_cap_p_per_kwh: !input price_cap_p_per_kwh
+  plunge_threshold_p_per_kwh: !input plunge_threshold_p_per_kwh
+  plunge_ignores_windows: !input plunge_ignores_windows
+  low_price_fallback_p_per_kwh: !input low_price_fallback_p_per_kwh
+  fallback_aggressive: !input fallback_aggressive
+  saving_session_helper: !input saving_session_helper
+
+condition: []
+
+action:
+  - variables:
+      soc: "{{ states(battery_soc) | float(0) }}"
+      price_data: "{{ state_attr(price_sensor, price_attribute) }}"
+      now: "{{ now() }}"
+      current_price: >
+        {% set attr = state_attr(price_sensor, price_attribute) %}
+        {% if attr and attr | length > 0 %}
+          {% set latest = attr | selectattr(start_key, '<=', now.isoformat()) | list | last %}
+          {% if latest %}
+            {{ latest[price_key] | float(0) }}
+          {% else %}
+            999
+          {% endif %}
+        {% else %}
+          999
+        {% endif %}
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ soc <= critical_min_soc }}"
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ charger_switch }}"
+          - stop: "Critical SoC — charging immediately"
+
+      - conditions:
+          - condition: template
+            value_template: "{{ current_price <= plunge_threshold_p_per_kwh }}"
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ charger_switch }}"
+          - stop: "Plunge condition met — FORCE ON"
+
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ states(saving_session_helper) == 'on' }}
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: "{{ charger_switch }}"
+          - stop: "Saving Session active — FORCE OFF"
+
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ current_price > price_cap_p_per_kwh and price_cap_p_per_kwh > 0 }}
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: "{{ charger_switch }}"
+          - stop: "Price above cap — OFF"
+
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ current_price <= low_price_fallback_p_per_kwh and low_price_fallback_p_per_kwh > 0 }}
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ charger_switch }}"
+          - stop: "Low price fallback — ON"
+
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ soc < target_soc - target_tolerance }}
+        sequence:
+          - service: switch.turn_on
+            target:
+              entity_id: "{{ charger_switch }}"
+      - conditions:
+          - condition: template
+            value_template: >
+              {{ soc > target_soc + target_tolerance }}
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: "{{ charger_switch }}"
+
+mode: single
