@@ -204,11 +204,10 @@ action:
   - variables:
       soc: "{{ states(battery_soc) | float(0) }}"
       price_data: "{{ state_attr(price_sensor, price_attribute) }}"
-      now: "{{ now() }}"
       current_price: >
         {% set attr = state_attr(price_sensor, price_attribute) %}
         {% if attr and attr | length > 0 %}
-          {% set latest = attr | selectattr(start_key, '<=', now.isoformat()) | list | last %}
+          {% set latest = attr | selectattr(start_key, '<=', now().isoformat()) | list | last %}
           {% if latest %}
             {{ latest[price_key] | float(0) }}
           {% else %}
