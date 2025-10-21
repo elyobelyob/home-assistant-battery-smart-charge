@@ -110,11 +110,11 @@ blueprint:
           mode: slider
 
     price_sensor:
-      name: BottlecapDave price sensor
-      description: "Sensor whose attributes include upcoming half-hourly rates"
+      name: BottlecapDave price entity
+      description: "Entity (sensor or other) whose attributes include upcoming half-hourly rates"
       selector:
         entity:
-          domain: sensor
+          multiple: false
 
     price_attribute:
       name: Price list attribute name
