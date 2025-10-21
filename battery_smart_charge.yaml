@@ -4,141 +4,141 @@ blueprint:
     Smart control for a battery charger using Octopus Agile prices (via BottlecapDave).
     Event-driven: reacts to new Agile data and SoC changes.
     Automatically handles Europe/London time with DST.
-
-alias: "Battery Smart Charging"
-
   domain: automation
-  input:
-    charger_switch:
-      name: Charger switch
-      description: Smart plug or relay that powers your charger
-      selector:
-        entity:
-          domain: switch
 
-    battery_soc:
-      name: Battery SoC sensor (%)
-      description: Sensor returning 0–100 (e.g. Victron, SmartShunt, BMS)
-      selector:
-        entity:
-          domain: sensor
+alias: "Battery Smart Charging (Agile + SoC + Plunge)"
 
-    battery_capacity:
-      name: Battery capacity (kWh)
-      description: Example: 7.17 (Fogstar 560Ah @ 12.8V)
-      default: 7.17
-      selector:
-        number:
-          min: 0.1
-          step: 0.01
+input:
+  charger_switch:
+    name: Charger switch
+    description: Smart plug or relay that powers your charger
+    selector:
+      entity:
+        domain: switch
 
-    charger_power:
-      name: Charger output power (W)
-      description: Example: 600
-      default: 600
-      selector:
-        number:
-          min: 10
-          max: 10000
-          step: 10
+  battery_soc:
+    name: Battery SoC sensor (%)
+    description: Sensor returning 0–100 (e.g. Victron, SmartShunt, BMS)
+    selector:
+      entity:
+        domain: sensor
 
-    charge_efficiency:
-      name: Charge efficiency (0–1)
-      description: Accounts for charger + conversion losses
-      default: 0.92
-      selector:
-        number:
-          min: 0.5
-          max: 1
-          step: 0.01
+  battery_capacity:
+    name: Battery capacity (kWh)
+    description: Example: 7.17 (Fogstar 560Ah @ 12.8V)
+    default: 7.17
+    selector:
+      number:
+        min: 0.1
+        step: 0.01
 
-    target_soc:
-      name: Target SoC (%)
-      default: 80
-      selector:
-        number:
-          min: 10
-          max: 100
-          step: 1
+  charger_power:
+    name: Charger output power (W)
+    description: Example: 600
+    default: 600
+    selector:
+      number:
+        min: 10
+        max: 10000
+        step: 10
 
-    tolerance:
-      name: Target tolerance (%)
-      description: Treat SoC within this band as close enough
-      default: 3
-      selector:
-        number:
-          min: 0
-          max: 10
-          step: 1
+  charge_efficiency:
+    name: Charge efficiency (0–1)
+    description: Accounts for charger + conversion losses
+    default: 0.92
+    selector:
+      number:
+        min: 0.5
+        max: 1
+        step: 0.01
 
-    critical_soc:
-      name: Critical minimum SoC (%)
-      description: Below this, charge immediately
-      default: 20
-      selector:
-        number:
-          min: 0
-          max: 100
-          step: 1
+  target_soc:
+    name: Target SoC (%)
+    default: 80
+    selector:
+      number:
+        min: 10
+        max: 100
+        step: 1
 
-    lookahead_hours:
-      name: Look-ahead horizon (hours)
-      description: How far ahead to plan (24–72 typical)
-      default: 48
-      selector:
-        number:
-          min: 12
-          max: 96
-          step: 6
+  tolerance:
+    name: Target tolerance (%)
+    description: Treat SoC within this band as close enough
+    default: 3
+    selector:
+      number:
+        min: 0
+        max: 10
+        step: 1
 
-    price_sensor:
-      name: BottlecapDave price entity
-      description: Entity whose attributes include upcoming Agile half-hourly rates
-      selector:
-        entity:
-          domain: sensor
+  critical_soc:
+    name: Critical minimum SoC (%)
+    description: Below this, charge immediately
+    default: 20
+    selector:
+      number:
+        min: 0
+        max: 100
+        step: 1
 
-    price_attribute:
-      name: Price list attribute name
-      default: rates
-      selector:
-        text:
+  lookahead_hours:
+    name: Look-ahead horizon (hours)
+    description: How far ahead to plan (24–72 typical)
+    default: 48
+    selector:
+      number:
+        min: 12
+        max: 96
+        step: 6
 
-    price_key:
-      name: Price key within each item
-      default: value_inc_vat
-      selector:
-        text:
+  price_sensor:
+    name: BottlecapDave price entity
+    description: Entity whose attributes include upcoming Agile half-hourly rates
+    selector:
+      entity:
+        domain: sensor
 
-    start_key:
-      name: Slot start key
-      default: start
-      selector:
-        text:
+  price_attribute:
+    name: Price list attribute name
+    default: rates
+    selector:
+      text:
 
-    end_key:
-      name: Slot end key
-      default: end
-      selector:
-        text:
+  price_key:
+    name: Price key within each item
+    default: value_inc_vat
+    selector:
+      text:
 
-    price_cap:
-      name: Price cap (p/kWh)
-      description: 0 disables the cap — above this, charging stops
-      default: 0
-      selector:
-        number:
-          min: 0
-          step: 0.1
+  start_key:
+    name: Slot start key
+    default: start
+    selector:
+      text:
 
-    plunge_threshold:
-      name: Plunge threshold (p/kWh)
-      description: At/under this price → FORCE ON
-      default: 0
-      selector:
-        number:
-          min: -10
-          step: 0.1
+  end_key:
+    name: Slot end key
+    default: end
+    selector:
+      text:
+
+  price_cap:
+    name: Price cap (p/kWh)
+    description: 0 disables the cap — above this, charging stops
+    default: 0
+    selector:
+      number:
+        min: 0
+        step: 0.1
+
+  plunge_threshold:
+    name: Plunge threshold (p/kWh)
+    description: At/under this price → FORCE ON
+    default: 0
+    selector:
+      number:
+        min: -10
+        step: 0.1
 
 mode: restart
 max_exceeded: silent
@@ -156,7 +156,6 @@ variables:
   plunge_threshold: !input plunge_threshold
   price_key: !input price_key
   start_key: !input start_key
-
   current_price: >
     {% set data = state_attr(!input price_sensor, !input price_attribute) %}
     {% if data is mapping or data is iterable %}
@@ -218,4 +217,3 @@ action:
         target:
           entity_id: !input charger_switch
       - stop: "Charging not required ({{ soc }}%)"
-
