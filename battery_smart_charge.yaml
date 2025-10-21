@@ -227,8 +227,23 @@ blueprint:
             - "*"
 
 trigger:
+  # Re-evaluate every 5 minutes (safety net)
   - platform: time_pattern
     minutes: "/5"
+
+  # Re-run when the Agile price sensor updates
+  - platform: state
+    entity_id: !input price_sensor
+
+  # Re-run whenever SoC sensor changes
+  - platform: state
+    entity_id: !input battery_soc
+    for:
+      seconds: 10  # short debounce to prevent flapping
+
+  # Optional: re-run if saving session flag changes
+  - platform: state
+    entity_id: !input saving_session_helper
 
 variables:
   charger_switch: !input charger_switch
