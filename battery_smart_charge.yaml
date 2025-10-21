@@ -81,16 +81,6 @@ input:
         max: 100
         step: 1
 
-  lookahead_hours:
-    name: Look-ahead horizon (hours)
-    description: How far ahead to plan (24–72 typical)
-    default: 48
-    selector:
-      number:
-        min: 12
-        max: 96
-        step: 6
-
   price_sensor:
     name: BottlecapDave price entity
     description: Entity whose attributes include upcoming Agile half-hourly rates
@@ -179,7 +169,6 @@ condition: []
 
 action:
   - choose:
-      # Emergency charge if SoC critically low
       - conditions: "{{ soc <= !input critical_soc }}"
         sequence:
           - service: switch.turn_on
@@ -187,7 +176,6 @@ action:
               entity_id: !input charger_switch
           - stop: "Charging: critical SoC ({{ soc }}%)"
 
-      # Force on if price <= plunge threshold
       - conditions: "{{ current_price <= plunge_threshold }}"
         sequence:
           - service: switch.turn_on
@@ -195,7 +183,6 @@ action:
               entity_id: !input charger_switch
           - stop: "Charging: plunge price ({{ current_price }}p)"
 
-      # Turn off if price above cap
       - conditions: >
           {{ price_cap > 0 and current_price > price_cap }}
         sequence:
@@ -204,7 +191,6 @@ action:
               entity_id: !input charger_switch
           - stop: "Charging stopped: price above cap ({{ current_price }}p)"
 
-      # Normal target charging logic
       - conditions: "{{ soc < (!input target_soc - !input tolerance) }}"
         sequence:
           - service: switch.turn_on
