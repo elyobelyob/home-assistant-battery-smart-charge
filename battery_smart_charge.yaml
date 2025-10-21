@@ -33,8 +33,8 @@ input:
         step: 0.01
 
   charger_power:
-    name: Charger output power (W)
-    description: Example: 600
+    name: "Charger output power (W)"
+    description: "Example: 600"
     default: 600
     selector:
       number:
