@@ -1,27 +1,27 @@
 blueprint:
   name: Battery Smart Charging (Agile + SoC + Plunge)
   description: >
-    Smart on/off control for a battery charger using Octopus Agile prices (via BottlecapDave).
-    Event-driven: reacts to new Agile data and battery SoC changes — no fixed off-peak window.
-    Looks ahead and automatically selects the cheapest slots to reach target SoC.
-    Special cases:
-      • Plunge price → FORCE ON (even at/above Target SoC)
-      • Optional low-price fallback → ON if price <= threshold
-      • Optional Saving Session → FORCE OFF
+    Smart control for a battery charger using Octopus Agile prices (via BottlecapDave).
+    Event-driven: reacts to new Agile data and SoC changes — no off-peak or fallback logic.
+    Key logic:
+      • Below critical SoC → charge now
+      • Price below plunge threshold → FORCE ON
+      • Above price cap → OFF
+      • Otherwise charge toward target SoC
     Handles Europe/London time with DST automatically.
   domain: automation
 
   input:
     charger_switch:
       name: Charger switch
-      description: "Smart plug or switch that powers your charger"
+      description: "Smart plug or relay that powers your charger"
       selector:
         entity:
           domain: switch
 
     battery_soc:
       name: Battery SoC sensor (%)
-      description: "Sensor returning 0–100 (e.g. SmartShunt/BMS)"
+      description: "Sensor returning 0–100 (e.g. Victron, SmartShunt, BMS)"
       selector:
         entity:
           domain: sensor
@@ -40,7 +40,7 @@ blueprint:
 
     charger_power_w:
       name: Charger output power (W)
-      description: "Real charging watts at your chosen setting (e.g., 600)"
+      description: "Example: 600"
       default: 600
       selector:
         number:
@@ -52,7 +52,7 @@ blueprint:
 
     charge_efficiency:
       name: Charge efficiency (0–1)
-      description: "Accounts for losses; 0.92 is a sensible default"
+      description: "Accounts for charger + conversion losses"
       default: 0.92
       selector:
         number:
@@ -74,7 +74,7 @@ blueprint:
 
     target_tolerance:
       name: Target tolerance (%)
-      description: "Treat SoC within this band of target as close enough"
+      description: "Treat SoC within this band as close enough"
       default: 3
       selector:
         number:
@@ -85,7 +85,7 @@ blueprint:
 
     critical_min_soc:
       name: Critical minimum SoC (%)
-      description: "Below this, charge immediately for safety"
+      description: "Below this, charge immediately"
       default: 20
       selector:
         number:
@@ -108,14 +108,14 @@ blueprint:
 
     price_sensor:
       name: BottlecapDave price entity
-      description: "Entity (sensor or event) whose attributes include upcoming half-hourly rates"
+      description: "Entity whose attributes include upcoming Agile half-hourly rates"
       selector:
         entity:
           multiple: false
 
     price_attribute:
       name: Price list attribute name
-      description: "Attribute that holds the list of upcoming rates (commonly 'rates')"
+      description: "Usually 'rates'"
       default: rates
       selector:
         text: {}
@@ -143,7 +143,7 @@ blueprint:
 
     price_cap_p_per_kwh:
       name: Price cap (p/kWh)
-      description: "0 disables the cap"
+      description: "0 disables the cap — above this, charging stops"
       default: 0
       selector:
         number:
@@ -155,7 +155,7 @@ blueprint:
 
     plunge_threshold_p_per_kwh:
       name: Plunge threshold (p/kWh)
-      description: "At/under this price → FORCE ON (even above target)"
+      description: "At/under this price → FORCE ON"
       default: 0.0
       selector:
         number:
@@ -164,43 +164,6 @@ blueprint:
           step: 0.1
           unit_of_measurement: "p/kWh"
           mode: box
-
-    plunge_ignores_limits:
-      name: Plunge ignores price cap
-      description: "If true, plunge ignores price cap"
-      default: true
-      selector:
-        boolean: {}
-
-    low_price_fallback_p_per_kwh:
-      name: Low-price fallback (p/kWh)
-      description: "0 disables. If no cheaper ahead and price ≤ this, turn on"
-      default: 0.0
-      selector:
-        number:
-          min: 0
-          max: 50
-          step: 0.1
-          unit_of_measurement: "p/kWh"
-          mode: box
-
-    fallback_aggressive:
-      name: "Fallback mode: aggressive"
-      description: "If true, fallback ignores cheaper-ahead check"
-      default: false
-      selector:
-        boolean: {}
-
-    saving_session_helper:
-      name: Saving Session active helper (optional)
-      description: "Optional input_boolean that you toggle ON during a Saving Session window"
-      default:
-      selector:
-        entity:
-          domain: input_boolean
-          multiple: false
-          include_entities:
-            - "*"
 
 trigger:
   # React instantly to Octopus Agile updates
@@ -213,11 +176,7 @@ trigger:
     for:
       seconds: 2
 
-  # Optional: respond to Saving Session flag
-  - platform: state
-    entity_id: !input saving_session_helper
-
-  # Safety net every 10 min (optional)
+  # Safety net every 10 min
   - platform: time_pattern
     minutes: "/10"
 
@@ -238,10 +197,6 @@ variables:
   end_key: !input end_key
   price_cap_p_per_kwh: !input price_cap_p_per_kwh
   plunge_threshold_p_per_kwh: !input plunge_threshold_p_per_kwh
-  plunge_ignores_limits: !input plunge_ignores_limits
-  low_price_fallback_p_per_kwh: !input low_price_fallback_p_per_kwh
-  fallback_aggressive: !input fallback_aggressive
-  saving_session_helper: !input saving_session_helper
 
 condition: []
 
@@ -264,6 +219,7 @@ action:
         {% endif %}
 
   - choose:
+      # Critical SoC - force charge
       - conditions:
           - condition: template
             value_template: "{{ soc <= critical_min_soc }}"
@@ -273,6 +229,7 @@ action:
               entity_id: "{{ charger_switch }}"
           - stop: "Critical SoC — charging immediately"
 
+      # Plunge - force ON
       - conditions:
           - condition: template
             value_template: "{{ current_price <= plunge_threshold_p_per_kwh }}"
@@ -282,15 +239,7 @@ action:
               entity_id: "{{ charger_switch }}"
           - stop: "Plunge condition met — FORCE ON"
 
-      - conditions:
-          - condition: template
-            value_template: "{{ states(saving_session_helper) == 'on' }}"
-        sequence:
-          - service: switch.turn_off
-            target:
-              entity_id: "{{ charger_switch }}"
-          - stop: "Saving Session active — FORCE OFF"
-
+      # Above price cap - OFF
       - conditions:
           - condition: template
             value_template: >
@@ -301,16 +250,7 @@ action:
               entity_id: "{{ charger_switch }}"
           - stop: "Price above cap — OFF"
 
-      - conditions:
-          - condition: template
-            value_template: >
-              {{ current_price <= low_price_fallback_p_per_kwh and low_price_fallback_p_per_kwh > 0 }}
-        sequence:
-          - service: switch.turn_on
-            target:
-              entity_id: "{{ charger_switch }}"
-          - stop: "Low price fallback — ON"
-
+  # Regular SoC management
   - choose:
       - conditions:
           - condition: template
