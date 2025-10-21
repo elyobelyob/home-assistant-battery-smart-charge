@@ -29,7 +29,7 @@ blueprint:
     battery_capacity_kwh:
       name: Battery capacity (kWh)
       description: "Example: 7.17 (Fogstar 560 Ah @ 12.8 V)"
-      default: 5.0
+      default: 7.17
       selector:
         number:
           min: 0.1
