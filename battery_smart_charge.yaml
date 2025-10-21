@@ -176,7 +176,7 @@ trigger:
     for:
       seconds: 2
 
-  # Safety net every 10 min
+  # Safety net every 10 minutes
   - platform: time_pattern
     minutes: "/10"
 
