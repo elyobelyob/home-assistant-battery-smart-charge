@@ -6,7 +6,7 @@ blueprint:
     Automatically handles Europe/London time with DST.
   domain: automation
 
-alias: "Battery Smart Charging (Agile + SoC + Plunge)"
+alias: "Battery Smart Charging"
 
 input:
   charger_switch:
