@@ -1,17 +1,14 @@
 blueprint:
-  name: Battery Smart Charging (Agile + SoC + Plunge) — Lean
+  name: Battery Smart Charging (Agile + SoC + Plunge)
   description: >
     Smart on/off control for a battery charger using Octopus Agile prices (via BottlecapDave).
-    No fixed deadline: looks ahead over a rolling horizon and picks the cheapest half-hour slots
-    to reach your Target SoC. Splits across multiple windows when optimal.
-
-    Special rules:
-      • Plunge price → FORCE ON (even at/above Target SoC): BMS will refuse extra charge and the
-        charger will simply power local loads.
-      • Optional low-price fallback → can also turn on when at/above target (configurable).
-      • Optional Saving Session → FORCE OFF in that window to protect payout.
-
-    Optional filters: Greener Nights window and price cap. Europe/London time; DST handled by HA.
+    Event-driven: reacts to new Agile data and battery SoC changes — no fixed off-peak window.
+    Looks ahead and automatically selects the cheapest slots to reach target SoC.
+    Special cases:
+      • Plunge price → FORCE ON (even at/above Target SoC)
+      • Optional low-price fallback → ON if price <= threshold
+      • Optional Saving Session → FORCE OFF
+    Handles Europe/London time with DST automatically.
   domain: automation
 
   input:
@@ -88,7 +85,7 @@ blueprint:
 
     critical_min_soc:
       name: Critical minimum SoC (%)
-      description: "Below this, charge immediately for safety (ignores price cap and windows)"
+      description: "Below this, charge immediately for safety"
       default: 20
       selector:
         number:
@@ -111,7 +108,7 @@ blueprint:
 
     price_sensor:
       name: BottlecapDave price entity
-      description: "Entity (sensor or other) whose attributes include upcoming half-hourly rates"
+      description: "Entity (sensor or event) whose attributes include upcoming half-hourly rates"
       selector:
         entity:
           multiple: false
@@ -125,7 +122,7 @@ blueprint:
 
     price_key:
       name: Price key within each item
-      description: "Usually 'value_inc_vat' (p/kWh); accepts 'value' too"
+      description: "Usually 'value_inc_vat' (p/kWh)"
       default: value_inc_vat
       selector:
         text: {}
@@ -143,27 +140,6 @@ blueprint:
       default: end
       selector:
         text: {}
-
-    limit_to_offpeak:
-      name: Limit to Greener Nights window
-      description: "If on, only schedule within the time window below"
-      default: false
-      selector:
-        boolean: {}
-
-    offpeak_start_time:
-      name: Off-peak start
-      description: "Typical example: 23:30"
-      default: "23:30:00"
-      selector:
-        time: {}
-
-    offpeak_end_time:
-      name: Off-peak end
-      description: "Typical example: 05:30"
-      default: "05:30:00"
-      selector:
-        time: {}
 
     price_cap_p_per_kwh:
       name: Price cap (p/kWh)
@@ -189,9 +165,9 @@ blueprint:
           unit_of_measurement: "p/kWh"
           mode: box
 
-    plunge_ignores_windows:
-      name: Plunge can override Greener Nights & price cap
-      description: "If true, plunge ignores window and price cap limits"
+    plunge_ignores_limits:
+      name: Plunge ignores price cap
+      description: "If true, plunge ignores price cap"
       default: true
       selector:
         boolean: {}
@@ -227,23 +203,23 @@ blueprint:
             - "*"
 
 trigger:
-  # Re-evaluate every 5 minutes (safety net)
-  - platform: time_pattern
-    minutes: "/5"
-
-  # Re-run when the Agile price sensor updates
+  # React instantly to Octopus Agile updates
   - platform: state
     entity_id: !input price_sensor
 
-  # Re-run whenever SoC sensor changes
+  # React instantly to SoC changes
   - platform: state
     entity_id: !input battery_soc
     for:
-      seconds: 10  # short debounce to prevent flapping
+      seconds: 2
 
-  # Optional: re-run if saving session flag changes
+  # Optional: respond to Saving Session flag
   - platform: state
     entity_id: !input saving_session_helper
+
+  # Safety net every 10 min (optional)
+  - platform: time_pattern
+    minutes: "/10"
 
 variables:
   charger_switch: !input charger_switch
@@ -260,12 +236,9 @@ variables:
   price_key: !input price_key
   start_key: !input start_key
   end_key: !input end_key
-  limit_to_offpeak: !input limit_to_offpeak
-  offpeak_start_time: !input offpeak_start_time
-  offpeak_end_time: !input offpeak_end_time
   price_cap_p_per_kwh: !input price_cap_p_per_kwh
   plunge_threshold_p_per_kwh: !input plunge_threshold_p_per_kwh
-  plunge_ignores_windows: !input plunge_ignores_windows
+  plunge_ignores_limits: !input plunge_ignores_limits
   low_price_fallback_p_per_kwh: !input low_price_fallback_p_per_kwh
   fallback_aggressive: !input fallback_aggressive
   saving_session_helper: !input saving_session_helper
@@ -284,10 +257,10 @@ action:
           {% if latest %}
             {{ latest[price_key] | float(0) }}
           {% else %}
-            999
+            {{ states(price_sensor) | float(999) }}
           {% endif %}
         {% else %}
-          999
+          {{ states(price_sensor) | float(999) }}
         {% endif %}
 
   - choose:
@@ -311,8 +284,7 @@ action:
 
       - conditions:
           - condition: template
-            value_template: >
-              {{ states(saving_session_helper) == 'on' }}
+            value_template: "{{ states(saving_session_helper) == 'on' }}"
         sequence:
           - service: switch.turn_off
             target:
@@ -342,16 +314,14 @@ action:
   - choose:
       - conditions:
           - condition: template
-            value_template: >
-              {{ soc < target_soc - target_tolerance }}
+            value_template: "{{ soc < target_soc - target_tolerance }}"
         sequence:
           - service: switch.turn_on
             target:
               entity_id: "{{ charger_switch }}"
       - conditions:
           - condition: template
-            value_template: >
-              {{ soc > target_soc + target_tolerance }}
+            value_template: "{{ soc > target_soc + target_tolerance }}"
         sequence:
           - service: switch.turn_off
             target:
