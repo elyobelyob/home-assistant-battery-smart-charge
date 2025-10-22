@@ -34,7 +34,7 @@ input:
 
   charger_power:
     name: Charger output power (W)
-    description: "Example  600"
+    description: "Example: 600"
     default: 600
     selector:
       number:
@@ -92,25 +92,25 @@ input:
     name: Price list attribute name
     default: rates
     selector:
-      text:
+      text: {}
 
   price_key:
     name: Price key within each item
     default: value_inc_vat
     selector:
-      text:
+      text: {}
 
   start_key:
     name: Slot start key
     default: start
     selector:
-      text:
+      text: {}
 
   end_key:
     name: Slot end key
     default: end
     selector:
-      text:
+      text: {}
 
   price_cap:
     name: Price cap (p/kWh)
@@ -140,14 +140,14 @@ trigger:
     entity_id: !input battery_soc
 
 variables:
-  soc: "{{ states(input.battery_soc) | float(0) }}"
-  price_data: "{{ state_attr(input.price_sensor, input.price_attribute) }}"
+  soc: "{{ states(!input battery_soc) | float(0) }}"
+  price_data: "{{ state_attr(!input price_sensor, !input price_attribute) }}"
   price_cap: !input price_cap
   plunge_threshold: !input plunge_threshold
   price_key: !input price_key
   start_key: !input start_key
   current_price: >
-    {% set data = state_attr(input.price_sensor, input.price_attribute) %}
+    {% set data = state_attr(!input price_sensor, !input price_attribute) %}
     {% if data is mapping or data is iterable %}
       {% set now_iso = now().isoformat() %}
       {% set valid = data | selectattr(start_key, 'defined') | list %}
@@ -156,20 +156,20 @@ variables:
         {% if latest is mapping and price_key in latest %}
           {{ latest[price_key] | float(999) }}
         {% else %}
-          {{ states(input.price_sensor) | float(999) }}
+          {{ states(!input price_sensor) | float(999) }}
         {% endif %}
       {% else %}
-        {{ states(input.price_sensor) | float(999) }}
+        {{ states(!input price_sensor) | float(999) }}
       {% endif %}
     {% else %}
-      {{ states(input.price_sensor) | float(999) }}
+      {{ states(!input price_sensor) | float(999) }}
     {% endif %}
 
 condition: []
 
 action:
   - choose:
-      - conditions: "{{ soc <= input.critical_soc }}"
+      - conditions: "{{ soc <= !input critical_soc }}"
         sequence:
           - service: switch.turn_on
             target:
@@ -190,7 +190,7 @@ action:
               entity_id: !input charger_switch
           - stop: "Charging stopped: price above cap ({{ current_price }}p)"
 
-      - conditions: "{{ soc < (input.target_soc - input.tolerance) }}"
+      - conditions: "{{ soc < (!input target_soc - !input tolerance) }}"
         sequence:
           - service: switch.turn_on
             target:
