@@ -25,7 +25,7 @@ input:
 
   battery_capacity:
     name: Battery capacity (kWh)
-    description: Example: 7.17 (Fogstar 560Ah @ 12.8V)
+    description: "Example: 7.17 (Fogstar 560Ah @ 12.8V)"
     default: 7.17
     selector:
       number:
