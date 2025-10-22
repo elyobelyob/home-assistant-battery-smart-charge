@@ -34,7 +34,7 @@ input:
 
   charger_power:
     name: Charger output power (W)
-    description: Example: 600
+    description: "Example: 600"
     default: 600
     selector:
       number:
