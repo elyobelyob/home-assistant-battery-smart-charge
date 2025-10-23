@@ -4,6 +4,7 @@ blueprint:
     Smart control of a battery charger using Octopus Agile half-hourly prices.
     Automatically chooses cheap slots and handles SoC, price caps, and plunge events.
   domain: automation
+  source_url: https://github.com/elyobelyob/home-assistant-battery-smart-charge
 
 input:
   charger_switch:
