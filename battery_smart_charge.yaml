@@ -105,34 +105,37 @@ trigger:
     entity_id: !input price_sensor
   - platform: state
     entity_id: !input battery_soc
-  # Optional: recheck every 30 minutes for safety
+  # Optional periodic check
   - platform: time_pattern
     minutes: "/30"
 
 variables:
-  # Resolve !input entities and attributes
   battery_soc_entity: !input battery_soc
   charger_switch_entity: !input charger_switch
   price_sensor_entity: !input price_sensor
   price_attribute_name: !input price_attribute
   price_key_name: !input price_key
   start_key_name: !input start_key
+  end_key_name: !input end_key
   price_cap: !input price_cap_p_per_kwh
   plunge_threshold: !input plunge_threshold_p_per_kwh
   target_soc: !input target_soc
   target_tolerance: !input target_tolerance
   critical_min_soc: !input critical_min_soc
 
-  # Calculated values
   soc: "{{ states(battery_soc_entity) | float(0) }}"
-  price_data: "{{ state_attr(price_sensor_entity, price_attribute_name) }}"
+
   current_price: >
     {% set data = state_attr(price_sensor_entity, price_attribute_name) %}
     {% if data %}
       {% set now_iso = now().isoformat() %}
-      {% set latest = data | selectattr(start_key_name, '<=', now_iso) | list | last %}
-      {% if latest %}
-        {{ latest[price_key_name] | float(999) }}
+      {% set entry = data
+        | selectattr(start_key_name, '<=', now_iso)
+        | selectattr(end_key_name, '>', now_iso)
+        | list
+        | first %}
+      {% if entry %}
+        {{ entry[price_key_name] | float(999) }}
       {% else %}
         {{ states(price_sensor_entity) | float(999) }}
       {% endif %}
@@ -143,7 +146,9 @@ variables:
 action:
   - choose:
       # 1. Critical SoC — force ON immediately
-      - conditions: "{{ soc <= critical_min_soc }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ soc | float <= critical_min_soc | float }}"
         sequence:
           - service: switch.turn_on
             target:
@@ -151,7 +156,9 @@ action:
           - stop: "Critical SoC — charging immediately"
 
       # 2. Plunge price — force ON
-      - conditions: "{{ current_price <= plunge_threshold }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ current_price | float <= plunge_threshold | float }}"
         sequence:
           - service: switch.turn_on
             target:
@@ -159,29 +166,35 @@ action:
           - stop: "Plunge condition met — FORCE ON"
 
       # 3. Above price cap — turn OFF
-      - conditions: "{{ current_price > price_cap and price_cap > 0 }}"
+      - conditions:
+          - condition: template
+            value_template: "{{ price_cap | float > 0 and current_price | float > price_cap | float }}"
         sequence:
           - service: switch.turn_off
             target:
               entity_id: "{{ charger_switch_entity }}"
           - stop: "Price above cap — OFF"
 
-      # 4. Regular SoC-based management
-      - conditions: "{{ soc < (target_soc - target_tolerance) }}"
+      # 4. SoC below target — start charging
+      - conditions:
+          - condition: template
+            value_template: "{{ soc | float < target_soc | float - target_tolerance | float }}"
         sequence:
           - service: switch.turn_on
             target:
               entity_id: "{{ charger_switch_entity }}"
           - stop: "Charging — below target SoC"
 
-      - conditions: "{{ soc > (target_soc + target_tolerance) }}"
+      # 5. SoC above target — stop charging
+      - conditions:
+          - condition: template
+            value_template: "{{ soc | float > target_soc | float + target_tolerance | float }}"
         sequence:
           - service: switch.turn_off
             target:
               entity_id: "{{ charger_switch_entity }}"
           - stop: "Charging — above target SoC"
 
-    # 5. Default (idle state)
     default:
       - service: switch.turn_off
         target:
