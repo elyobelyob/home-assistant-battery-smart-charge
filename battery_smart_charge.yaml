@@ -175,15 +175,17 @@ action:
               entity_id: "{{ charger_switch_entity }}"
           - stop: "Price above cap — OFF"
 
-      # 4. SoC below target — start charging
+      # 4. SoC below target — start charging only if price is cheap
       - conditions:
           - condition: template
-            value_template: "{{ soc | float < target_soc | float - target_tolerance | float }}"
+            value_template: >-
+              {{ soc | float < (target_soc | float - target_tolerance | float)
+                 and (price_cap | float == 0 or current_price | float <= price_cap | float) }}
         sequence:
           - service: switch.turn_on
             target:
               entity_id: "{{ charger_switch_entity }}"
-          - stop: "Charging — below target SoC"
+    - stop: "Charging — below target SoC and price within cap"
 
       # 5. SoC above target — stop charging
       - conditions:
